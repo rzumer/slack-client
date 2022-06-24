@@ -63,7 +63,7 @@ class Payload implements \ArrayAccess, \JsonSerializable
      * @param mixed $offset
      * @param mixed $value
      */
-    public function offsetSet($offset, $value)
+    public function offsetSet($offset, $value): void
     {
         if (is_null($offset)) {
             $this->data[] = $value;
@@ -74,9 +74,8 @@ class Payload implements \ArrayAccess, \JsonSerializable
 
     /**
      * @param mixed $offset
-     * @return bool
      */
-    public function offsetExists($offset)
+    public function offsetExists($offset): bool
     {
         return isset($this->data[$offset]);
     }
@@ -84,7 +83,7 @@ class Payload implements \ArrayAccess, \JsonSerializable
     /**
      * @param mixed $offset
      */
-    public function offsetUnset($offset)
+    public function offsetUnset($offset): void
     {
         unset($this->data[$offset]);
     }
@@ -93,6 +92,7 @@ class Payload implements \ArrayAccess, \JsonSerializable
      * @param mixed $offset
      * @return null
      */
+    #[\ReturnTypeWillChange]
     public function offsetGet($offset)
     {
         return isset($this->data[$offset]) ? $this->data[$offset] : null;
@@ -101,6 +101,7 @@ class Payload implements \ArrayAccess, \JsonSerializable
     /**
      * @return array
      */
+    #[\ReturnTypeWillChange]
     public function jsonSerialize()
     {
         return $this->data;

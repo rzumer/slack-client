@@ -1,12 +1,11 @@
 <?php
 namespace Slack;
 
-use Devristo\Phpws\Client\WebSocket;
-use Devristo\Phpws\Messaging\WebSocketMessageInterface;
 use Evenement\EventEmitterTrait;
+use Ratchet\Client\WebSocket;
+use Ratchet\RFC6455\Messaging\MessageInterface;
 use React\Promise;
 use React\Promise\Timer;
-use React\EventLoop\LoopInterface;
 use Slack\Message\Message;
 
 /**
@@ -76,22 +75,6 @@ class RealTimeClient extends ApiClient
     protected $bots = [];
 
     /**
-     * @var \Zend\Log\Logger Logger for this client
-     */
-    protected $logger = null;
-
-    /**
-     * {@inheritDoc}
-     */
-    public function __construct(LoopInterface $loop, GuzzleHttp\ClientInterface $httpClient = null)
-    {
-        parent::__construct($loop, $httpClient);
-
-        $this->logger = new \Zend\Log\Logger();
-        $this->logger->addWriter(new \Zend\Log\Writer\Stream('php://stderr'));
-    }
-
-    /**
      * Connects to the real-time messaging server.
      *
      * @return \React\Promise\PromiseInterface
@@ -113,13 +96,7 @@ class RealTimeClient extends ApiClient
             $this->users[$responseData['self']['id']] = new User($this, $responseData['self']);
 
             // initiate the websocket connection
-            // write PHPWS things to the existing logger
-            $this->websocket = new WebSocket($responseData['url'], $this->loop, $this->logger);
-            $this->websocket->on('message', function ($message) {
-                $this->onMessage($message);
-            });
-
-            return $this->websocket->open();
+            return \Ratchet\Client\connect($responseData['url'], [], [], $this->loop);
         }, function($exception) use ($deferred) {
             // if connection was not succesfull
             $deferred->reject(new ConnectionException(
@@ -172,7 +149,13 @@ class RealTimeClient extends ApiClient
         })
 
         // then wait for the connection to be ready.
-        ->then(function () use ($deferred) {
+        ->then(function (WebSocket $websocket) use ($deferred) {
+            $this->websocket = $websocket;
+
+            $this->websocket->on('message', function ($message) {
+                $this->onMessage($message);
+            });
+
             $this->once('hello', function () use ($deferred) {
                 $deferred->resolve();
             });
@@ -416,10 +399,8 @@ class RealTimeClient extends ApiClient
                 // pong received within timeout
             })
             ->otherwise(function (Timer\TimeoutException $error) {
-                $this->logger->notice('Lost websocket connection, re-connecting..');
                 $this->disconnect();
                 $this->connect();
-                $this->logger->notice('reconnected');
             });
     }
 
@@ -459,12 +440,12 @@ class RealTimeClient extends ApiClient
     /**
      * Handles incoming websocket messages, parses them, and emits them as remote events.
      *
-     * @param WebSocketMessageInterface $messageRaw A websocket message.
+     * @param MessageInterface $messageRaw A websocket message.
      */
-    private function onMessage(WebSocketMessageInterface $message)
+    private function onMessage(MessageInterface $message)
     {
         // parse the message and get the event name
-        $payload = Payload::fromJson($message->getData());
+        $payload = Payload::fromJson($message->getPayload());
 
         if (isset($payload['type'])) {
             $this->emit('_internal_message', [$payload['type'], $payload]);
@@ -565,7 +546,7 @@ class RealTimeClient extends ApiClient
                     $deferred = $this->pendingMessages[$payload['reply_to']];
 
                     // Resolve or reject the promise that was waiting for the reply.
-                    if (isset($payload['ok']) && $payload['ok'] === true || $payload['type'] == 'pong') {
+                    if ((isset($payload['ok']) && $payload['ok'] === true) || $payload['type'] == 'pong') {
                         $deferred->resolve();
                     } else {
                         $deferred->reject($payload['error']);

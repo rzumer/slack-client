@@ -109,7 +109,7 @@ class ApiClientTest extends TestCase
         ]);
 
         $file = new File();
-        $file->setPath($this->faker->image(sys_get_temp_dir()))
+        $file->setPath(__FILE__)
             ->setTitle($this->faker->title)
             ->setInitialComment($this->faker->sentence())
             ->setFilename($this->faker->name)
